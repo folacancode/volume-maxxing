@@ -1,0 +1,43 @@
+name: meme-spike-scan
+
+on:
+  schedule:
+    # NOTE: GitHub's cron scheduler is best-effort, not exact. During high
+    # platform load, 15-min schedules commonly slip by 5-15+ minutes. Don't
+    # rely on this for split-second entries.
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}   # lets you trigger a run manually from the Actions tab
+
+permissions:
+  contents: write   # needed to commit state.json back to the repo
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install -r requirements.txt
+
+      - name: Run scanner
+        env:
+          BIRDEYE_API_KEY: ${{ secrets.BIRDEYE_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          WATCHLIST: ${{ vars.WATCHLIST }}
+          MAX_DISCOVERY_TOKENS: ${{ vars.MAX_DISCOVERY_TOKENS || '6' }}
+          SPIKE_MULTIPLIER: ${{ vars.SPIKE_MULTIPLIER || '3' }}
+          MIN_BUY_VOLUME_USD: ${{ vars.MIN_BUY_VOLUME_USD || '5000' }}
+        run: python scanner.py
+
+      - name: Commit updated state
+        run: |
+          git config user.name "meme-spike-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add state.json
+          git diff --cached --quiet || git commit -m "update alert state [skip ci]"
+          git push
