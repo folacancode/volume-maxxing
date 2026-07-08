@@ -11,11 +11,13 @@ Optional env vars (all have defaults, see README):
   CHAIN, WATCHLIST, MAX_DISCOVERY_TOKENS, SPIKE_MULTIPLIER,
   MIN_BUY_VOLUME_USD, RE_ALERT_COOLDOWN_SEC
 
-IMPORTANT: I have not run this against a live Birdeye response, so field
-names in `bucket_buy_volume` (blockUnixTime, side, volumeUSD, etc.) are based
-on Birdeye's published schema at write-time and may need small tweaks once
-you see real output. Run with DEBUG=1 once to print raw trade payloads and
-confirm field names before trusting alerts.
+Schema confirmed against a live DEBUG=1 run on 2026-07-08:
+- blockUnixTime and side ("buy"/"sell") are top-level fields on each trade,
+  as expected.
+- There is NO direct USD-volume field on a trade. Each trade has `base` and
+  `quote` legs, each with `uiAmount` (token quantity) and `price` (USD per
+  token). USD size of the trade = uiAmount * price on either leg; see
+  trade_usd_volume() below, which averages both legs for robustness.
 """
 
 import os
@@ -33,6 +35,7 @@ WATCHLIST = [a.strip() for a in os.environ.get("WATCHLIST", "").split(",") if a.
 MAX_DISCOVERY_TOKENS = int(os.environ.get("MAX_DISCOVERY_TOKENS", "6"))
 SPIKE_MULTIPLIER = float(os.environ.get("SPIKE_MULTIPLIER", "3"))
 MIN_BUY_VOLUME_USD = float(os.environ.get("MIN_BUY_VOLUME_USD", "5000"))
+MAX_MARKET_CAP_USD = float(os.environ.get("MAX_MARKET_CAP_USD", "3000000"))
 RE_ALERT_COOLDOWN_SEC = int(os.environ.get("RE_ALERT_COOLDOWN_SEC", "3600"))
 DEBUG = os.environ.get("DEBUG", "") == "1"
 
@@ -80,8 +83,12 @@ def discover_candidates():
         if data and data.get("success"):
             for item in data.get("data", {}).get("items", []):
                 addr = item.get("address")
-                if addr and addr not in candidates:
-                    candidates.append(addr)
+                mcap = item.get("market_cap")
+                if not addr or addr in candidates:
+                    continue
+                if mcap is not None and mcap > MAX_MARKET_CAP_USD:
+                    continue  # skip already-pumped tokens above the ceiling
+                candidates.append(addr)
     return candidates
 
 
@@ -93,6 +100,23 @@ def get_recent_trades(address, limit=50):
     if not data or not data.get("success"):
         return []
     return data.get("data", {}).get("items", [])
+
+
+def trade_usd_volume(t):
+    """Birdeye /defi/txs/token trades have no direct USD field. Each trade has
+    base/quote legs, each with uiAmount (token qty) and price (USD/token).
+    uiAmount * price on either leg gives the trade's USD size; average both
+    legs for robustness against float/rounding quirks on either side."""
+    vals = []
+    for leg in (t.get("base") or {}, t.get("quote") or {}):
+        try:
+            amt = leg.get("uiAmount")
+            price = leg.get("price")
+            if amt is not None and price is not None:
+                vals.append(float(amt) * float(price))
+        except (TypeError, ValueError):
+            continue
+    return sum(vals) / len(vals) if vals else 0.0
 
 
 def bucket_buy_volume(trades, bucket_minutes=15, buckets=4):
@@ -108,8 +132,8 @@ def bucket_buy_volume(trades, bucket_minutes=15, buckets=4):
         idx_from_now = int(age // bucket_seconds)  # 0 = current (newest) bucket
         if idx_from_now < 0 or idx_from_now >= buckets:
             continue
-        side = (t.get("side") or t.get("txType") or "").lower()
-        usd = t.get("volumeUSD") or t.get("volume_usd") or t.get("volume_in_usd") or 0
+        side = (t.get("side") or "").lower()
+        usd = trade_usd_volume(t)
         if side == "buy":
             vols[buckets - 1 - idx_from_now] += float(usd)
     return vols
