@@ -32,6 +32,9 @@ jobs:
           MAX_DISCOVERY_TOKENS: ${{ vars.MAX_DISCOVERY_TOKENS || '6' }}
           SPIKE_MULTIPLIER: ${{ vars.SPIKE_MULTIPLIER || '3' }}
           MIN_BUY_VOLUME_USD: ${{ vars.MIN_BUY_VOLUME_USD || '5000' }}
+
+          DEBUG: "1"
+          
         run: python scanner.py
 
       - name: Commit updated state
