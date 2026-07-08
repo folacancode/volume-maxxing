@@ -33,6 +33,8 @@ jobs:
           SPIKE_MULTIPLIER: ${{ vars.SPIKE_MULTIPLIER || '3' }}
           MIN_BUY_VOLUME_USD: ${{ vars.MIN_BUY_VOLUME_USD || '5000' }}
           MAX_MARKET_CAP_USD: ${{ vars.MAX_MARKET_CAP_USD || '3000000' }}
+
+          DEBUG: "1"
           
         run: python scanner.py
 
