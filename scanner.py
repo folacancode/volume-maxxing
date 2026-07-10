@@ -5,9 +5,9 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 # Sniper settings
-MAX_MARKET_CAP_USD = float(os.environ.get("MAX_MARKET_CAP_USD", "100000")) 
-MIN_M5_VOLUME = float(os.environ.get("MIN_M5_VOLUME", "2500"))            
-MIN_M5_BUYS = int(os.environ.get("MIN_M5_BUYS", "15"))                    
+MAX_MARKET_CAP_USD = float(os.environ.get("MAX_MARKET_CAP_USD", "2000000")) 
+MIN_M5_VOLUME = float(os.environ.get("MIN_M5_VOLUME", "2000"))            
+MIN_M5_BUYS = int(os.environ.get("MIN_M5_BUYS", "10"))                    
 
 def send_telegram(text):
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
