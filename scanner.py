@@ -25,8 +25,18 @@ def get_trending_tokens(limit=30):
     try:
         resp = requests.get(url, timeout=15)
         if resp.status_code == 200:
+            trending = []
             seen = set()
-            return [item.get("tokenAddress") for item in resp.json() if item.get("tokenAddress") and not (item.get("tokenAddress") in seen or seen.add(item.get("tokenAddress")))]][:limit]
+            for item in resp.json():
+                addr = item.get("tokenAddress")
+                if addr and addr not in seen:
+                    seen.add(addr)
+                    trending.append(addr)
+                    if len(trending) >= limit:
+                        break
+            return trending
+        else:
+            print(f"[err] DexScreener trending API returned status {resp.status_code}")
     except Exception as e:
         print(f"[err] Failed fetching trending: {e}")
     return []
